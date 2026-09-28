@@ -18,8 +18,8 @@ import {
 const webRoot = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(webRoot, '..');
 const isDev = process.argv.includes('--dev');
-const host = process.env.VIMAX_WEB_HOST || '127.0.0.1';
-const port = Number(process.env.VIMAX_WEB_PORT || 4173);
+const host = process.env.VIMAX_WEB_HOST || process.env.HOST || '0.0.0.0';
+const port = Number(process.env.VIMAX_WEB_PORT || process.env.PORT || 3000);
 const configuredUploadLimit = Number(process.env.VIMAX_WEB_UPLOAD_MAX_BYTES || 100 * 1024 * 1024);
 const uploadMaxBytes = Number.isFinite(configuredUploadLimit) && configuredUploadLimit > 0
   ? configuredUploadLimit
@@ -149,7 +149,7 @@ async function startAgent({newSession, sessionId, projectName = ''}) {
       ? ['--session', sessionId]
       : [];
   activeSessionId = sessionId;
-  const child = spawn(command, [...args, 'main_agent.py', '--jsonl', '--stdin-repl', ...sessionArgs], {
+  const child = spawn(command, [...args, ...sessionArgs], {
     cwd: repoRoot,
     env: process.env,
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -244,15 +244,28 @@ function stopAgent(reason) {
 
 function agentCommand() {
   if (process.env.VIMAX_AGENT_COMMAND) {
-    return {command: process.env.VIMAX_AGENT_COMMAND, args: splitArgs(process.env.VIMAX_AGENT_ARGS || '')};
+    return {
+      command: process.env.VIMAX_AGENT_COMMAND,
+      args: [...splitArgs(process.env.VIMAX_AGENT_ARGS || ''), '--jsonl', '--stdin-repl'],
+    };
   }
   const configuredPython = process.env.VIMAX_PYTHON_CMD;
-  if (configuredPython) return {command: configuredPython, args: []};
+  if (configuredPython) {
+    return {command: configuredPython, args: ['main_agent.py', '--jsonl', '--stdin-repl']};
+  }
   const bundledUv = process.env.VIMAX_UV_CMD || path.join(process.env.HOME || '', '.local', 'bin', 'uv');
-  if (bundledUv && existsSync(bundledUv)) return {command: bundledUv, args: ['run', 'python']};
+  if (bundledUv && existsSync(bundledUv)) {
+    return {command: bundledUv, args: ['run', 'python', 'main_agent.py', '--jsonl', '--stdin-repl']};
+  }
   const venvPython = path.join(repoRoot, '.venv', 'bin', 'python3');
-  if (existsSync(venvPython)) return {command: venvPython, args: []};
-  return {command: 'uv', args: ['run', 'python']};
+  if (existsSync(venvPython)) {
+    return {command: venvPython, args: ['main_agent.py', '--jsonl', '--stdin-repl']};
+  }
+  const nodeAgent = path.join(webRoot, 'agent-engine.mjs');
+  if (existsSync(nodeAgent)) {
+    return {command: process.execPath, args: [nodeAgent, '--jsonl', '--stdin-repl']};
+  }
+  return {command: 'python3', args: ['main_agent.py', '--jsonl', '--stdin-repl']};
 }
 
 function splitArgs(value) {

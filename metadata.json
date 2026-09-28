@@ -1,0 +1,8 @@
+{
+  "name": "ViMax Workspace",
+  "description": "Multi-agent video and storyboard creation platform with interactive scripting, character planning, and visual storyboard workflows.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
